@@ -19,9 +19,3 @@ variable "github_app_pem_file" {
   type        = string
   sensitive   = true
 }
-
-variable "members" {
-  description = "Map of org members and their roles (member or admin)"
-  type        = map(string)
-  default     = {}
-}
