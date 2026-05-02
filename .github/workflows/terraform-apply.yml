@@ -61,7 +61,9 @@ jobs:
       - name: Update manager-data
         working-directory: .
         run: |
-          git submodule update --remote manager-data
+          manager_data_branch="$(git config -f .gitmodules submodule.manager-data.branch)"
+          git -C manager-data fetch --depth=1 origin "${manager_data_branch}"
+          git -C manager-data checkout --detach FETCH_HEAD
           git -C manager-data log -1 --oneline
 
       - name: Setup Terraform
