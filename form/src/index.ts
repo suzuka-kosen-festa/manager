@@ -1,5 +1,6 @@
 interface Env {
   GITHUB_APP_ID: string;
+  GITHUB_CLIENT_ID?: string;
   GITHUB_INSTALLATION_ID: string;
   GITHUB_PRIVATE_KEY: string;
   GITHUB_OWNER?: string;
@@ -310,9 +311,9 @@ async function createInstallationToken(env: Env): Promise<string> {
   assertEnv(env.GITHUB_INSTALLATION_ID, "GITHUB_INSTALLATION_ID");
   assertEnv(env.GITHUB_PRIVATE_KEY, "GITHUB_PRIVATE_KEY");
 
-  const appId = cleanSecret(env.GITHUB_APP_ID);
+  const issuer = cleanSecret(env.GITHUB_CLIENT_ID ?? env.GITHUB_APP_ID);
   const installationId = cleanSecret(env.GITHUB_INSTALLATION_ID);
-  const jwt = await createAppJwt(appId, cleanPrivateKey(env.GITHUB_PRIVATE_KEY));
+  const jwt = await createAppJwt(issuer, cleanPrivateKey(env.GITHUB_PRIVATE_KEY));
   const response = await fetch(`https://api.github.com/app/installations/${installationId}/access_tokens`, {
     method: "POST",
     headers: {
