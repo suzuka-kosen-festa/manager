@@ -10,8 +10,6 @@ on:
       - "terraform/**"
       - "Makefile"
       - "manager-data"
-  schedule:
-    - cron: "*/30 * * * *"
   repository_dispatch:
     types:
       - terraform-apply
@@ -59,24 +57,6 @@ jobs:
           ref: main
           submodules: recursive
           show-progress: false
-
-      - name: Update manager-data
-        working-directory: .
-        run: |
-          git -C manager-data fetch --quiet --depth=1 origin main
-          git -C manager-data checkout --quiet --detach origin/main
-
-          if git diff --quiet -- manager-data; then
-            echo "manager-data is already up to date."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add manager-data
-          git commit -m "chore: update manager-data submodule"
-          git push origin HEAD:main
-          echo "manager-data updated."
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
