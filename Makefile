@@ -1,36 +1,21 @@
 REPO_ROOT     := $(CURDIR)
-TERRAFORM_DIR := /workspace/terraform
-TF_IMAGE      := hashicorp/terraform:latest
+TERRAFORM_DIR := $(CURDIR)/terraform
+MISE          := mise exec --
 
 .PHONY: init test plan apply security
 
 init:
-	docker run --rm \
-	  -v $(REPO_ROOT):/workspace \
-	  -w $(TERRAFORM_DIR) \
-	  $(TF_IMAGE) init
+	cd $(TERRAFORM_DIR) && $(MISE) terraform init
 
 test:
-	docker run --rm \
-	  -v $(REPO_ROOT):/workspace \
-	  -w $(TERRAFORM_DIR) \
-	  $(TF_IMAGE) fmt -check -recursive
-	docker run --rm \
-	  -v $(REPO_ROOT):/workspace \
-	  -w $(TERRAFORM_DIR) \
-	  $(TF_IMAGE) validate
+	cd $(TERRAFORM_DIR) && $(MISE) terraform fmt -check -recursive
+	cd $(TERRAFORM_DIR) && $(MISE) terraform validate
 
 plan: init
-	docker run --rm \
-	  -v $(REPO_ROOT):/workspace \
-	  -w $(TERRAFORM_DIR) \
-	  $(TF_IMAGE) plan
+	cd $(TERRAFORM_DIR) && $(MISE) terraform plan
 
 apply: init
-	docker run --rm \
-	  -v $(REPO_ROOT):/workspace \
-	  -w $(TERRAFORM_DIR) \
-	  $(TF_IMAGE) apply
+	cd $(TERRAFORM_DIR) && $(MISE) terraform apply
 
 security:
 	@echo "==> tflint"
