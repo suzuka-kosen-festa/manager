@@ -8,6 +8,7 @@ interface Env {
   MEMBERS_CSV_PATH?: string;
   DEFAULT_ROLE?: string;
   ALLOWED_EMAIL_DOMAINS?: string;
+  DISCORD_WEBHOOK_URL?: string;
 }
 
 interface Application {
@@ -157,6 +158,7 @@ async function createMemberPullRequest(
 
   const memo = buildMemo(application);
   const nextCsv = appendCsvRow(currentCsv, [application.username, config.defaultRole, memo]);
+  const diff = buildAppendDiff(config.csvPath, currentCsv, nextCsv);
   await githubFetch(
     config,
     `/repos/${config.owner}/${config.repo}/contents/${encodeURI(config.csvPath)}`,
@@ -172,7 +174,7 @@ async function createMemberPullRequest(
     },
   );
 
-  return githubFetch<{ html_url: string }>(
+  const pullRequest = await githubFetch<{ html_url: string }>(
     config,
     `/repos/${config.owner}/${config.repo}/pulls`,
     {
@@ -196,6 +198,90 @@ async function createMemberPullRequest(
       }),
     },
   );
+
+  await notifyDiscord(env, {
+    application,
+    accessEmail,
+    diff,
+    pullRequestUrl: pullRequest.html_url,
+    repo: `${config.owner}/${config.repo}`,
+  });
+
+  return pullRequest;
+}
+
+async function notifyDiscord(
+  env: Env,
+  notification: {
+    application: Application;
+    accessEmail: string | undefined;
+    diff: string;
+    pullRequestUrl: string;
+    repo: string;
+  },
+): Promise<void> {
+  if (!env.DISCORD_WEBHOOK_URL) {
+    return;
+  }
+
+  const content = truncateDiscordContent([
+    "GitHub username 申請フォームで Pull Request を作成しました。",
+    "",
+    `Repository: ${notification.repo}`,
+    `Pull Request: ${notification.pullRequestUrl}`,
+    `GitHub username: ${notification.application.username}`,
+    `名前: ${notification.application.name}`,
+    `高専メールアドレス: ${notification.application.email}`,
+    notification.accessEmail ? `Cloudflare Access user: ${notification.accessEmail}` : undefined,
+    "",
+    "```diff",
+    notification.diff,
+    "```",
+  ].filter(Boolean).join("\n"));
+
+  try {
+    const response = await fetch(env.DISCORD_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+
+    if (!response.ok) {
+      console.error(`Discord webhook request failed: ${response.status} ${await response.text()}`);
+    }
+  } catch (error) {
+    console.error("Discord webhook request failed", error);
+  }
+}
+
+function truncateDiscordContent(content: string): string {
+  const limit = 2000;
+  if (content.length <= limit) {
+    return content;
+  }
+
+  const suffix = "\n...(truncated)\n```";
+  return `${content.slice(0, limit - suffix.length)}${suffix}`;
+}
+
+function buildAppendDiff(path: string, currentCsv: string, nextCsv: string): string {
+  const currentLines = splitLines(currentCsv);
+  const nextLines = splitLines(nextCsv);
+  const addedLines = nextLines.slice(currentLines.length);
+  const startLine = currentLines.length + 1;
+
+  return [
+    `diff --git a/${path} b/${path}`,
+    `--- a/${path}`,
+    `+++ b/${path}`,
+    `@@ -${currentLines.length},0 +${startLine},${addedLines.length} @@`,
+    ...addedLines.map((line) => `+${line}`),
+  ].join("\n");
+}
+
+function splitLines(value: string): string[] {
+  const normalized = value.replace(/\r\n/g, "\n").replace(/\n$/, "");
+  return normalized.length === 0 ? [] : normalized.split("\n");
 }
 
 function withCanonicalEmail(application: Application, accessEmail: string | undefined): Application {

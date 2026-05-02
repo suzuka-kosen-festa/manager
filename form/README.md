@@ -29,9 +29,11 @@ cd form
 wrangler secret put GITHUB_APP_ID
 wrangler secret put GITHUB_INSTALLATION_ID
 wrangler secret put GITHUB_PRIVATE_KEY
+wrangler secret put DISCORD_WEBHOOK_URL
 ```
 
 `GITHUB_PRIVATE_KEY` は GitHub App の PEM 秘密鍵をそのまま登録します。
+`DISCORD_WEBHOOK_URL` には申請成功時の差分通知を送る Discord Webhook URL を登録します。
 
 ## 設定
 
