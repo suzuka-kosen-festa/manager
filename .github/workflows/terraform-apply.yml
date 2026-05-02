@@ -106,11 +106,16 @@ jobs:
           echo "Terraform validate completed."
 
       - name: Terraform Plan
+        id: plan
         run: |
           set +e
-          terraform plan -no-color -out=tfplan > terraform-plan.log 2>&1
+          terraform plan -no-color -detailed-exitcode -out=tfplan > terraform-plan.log 2>&1
           status=$?
-          if [ "${status}" -ne 0 ]; then
+          if [ "${status}" -eq 0 ]; then
+            echo "has_changes=false" >> "${GITHUB_OUTPUT}"
+          elif [ "${status}" -eq 2 ]; then
+            echo "has_changes=true" >> "${GITHUB_OUTPUT}"
+          else
             echo "Terraform plan failed. Logs are suppressed because this workflow is public."
             exit "${status}"
           fi
@@ -135,6 +140,7 @@ jobs:
           echo "Terraform apply completed."
 
       - name: Notify Discord
+        if: steps.plan.outputs.has_changes == 'true'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
