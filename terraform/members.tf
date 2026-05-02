@@ -13,4 +13,8 @@ resource "github_membership" "members" {
 
   username = each.key
   role     = each.value
+
+  lifecycle {
+    ignore_changes = [etag]
+  }
 }
