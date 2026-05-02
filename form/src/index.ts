@@ -29,7 +29,7 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === "GET" && url.pathname === "/") {
-      return html(renderForm());
+      return html(renderForm(getAccessAuthenticatedUserEmail(request)));
     }
 
     if (request.method === "POST" && url.pathname === "/apply") {
@@ -41,7 +41,8 @@ export default {
 };
 
 async function handleApply(request: Request, env: Env): Promise<Response> {
-  const application = await readApplication(request);
+  const accessEmail = getAccessAuthenticatedUserEmail(request);
+  const application = withCanonicalEmail(await readApplication(request), accessEmail);
   const errors = validateApplication(application, env);
 
   if (errors.length > 0) {
@@ -49,7 +50,7 @@ async function handleApply(request: Request, env: Env): Promise<Response> {
   }
 
   try {
-    const result = await createMemberPullRequest(env, application, request);
+    const result = await createMemberPullRequest(env, application, accessEmail);
     return json({ ok: true, pullRequestUrl: result.html_url });
   } catch (error) {
     console.error(error);
@@ -114,7 +115,11 @@ function validateApplication(application: Application, env: Env): string[] {
   return errors;
 }
 
-async function createMemberPullRequest(env: Env, application: Application, request: Request): Promise<{ html_url: string }> {
+async function createMemberPullRequest(
+  env: Env,
+  application: Application,
+  accessEmail: string | undefined,
+): Promise<{ html_url: string }> {
   const config = githubConfig(env);
   const token = await createInstallationToken(env);
   const headers = githubHeaders(token);
@@ -167,7 +172,6 @@ async function createMemberPullRequest(env: Env, application: Application, reque
     },
   );
 
-  const accessUser = request.headers.get("cf-access-authenticated-user-email");
   return githubFetch<{ html_url: string }>(
     config,
     `/repos/${config.owner}/${config.repo}/pulls`,
@@ -184,7 +188,7 @@ async function createMemberPullRequest(env: Env, application: Application, reque
           `- GitHub username: \`${application.username}\``,
           `- 名前: ${application.name}`,
           `- 高専メールアドレス: ${application.email}`,
-          accessUser ? `- Cloudflare Access user: ${accessUser}` : undefined,
+          accessEmail ? `- Cloudflare Access user: ${accessEmail}` : undefined,
           "",
           "申請理由:",
           application.reason,
@@ -192,6 +196,17 @@ async function createMemberPullRequest(env: Env, application: Application, reque
       }),
     },
   );
+}
+
+function withCanonicalEmail(application: Application, accessEmail: string | undefined): Application {
+  if (!accessEmail) {
+    return application;
+  }
+
+  return {
+    ...application,
+    email: accessEmail,
+  };
 }
 
 function githubConfig(env: Env) {
@@ -442,6 +457,11 @@ function stringValue(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function getAccessAuthenticatedUserEmail(request: Request): string | undefined {
+  const email = request.headers.get("cf-access-authenticated-user-email")?.trim();
+  return email || undefined;
+}
+
 function html(body: string, status = 200): Response {
   return new Response(body, {
     status,
@@ -456,7 +476,14 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function renderForm(): string {
+function renderForm(accessEmail: string | undefined): string {
+  const emailInputAttributes = accessEmail
+    ? `value="${escapeHtml(accessEmail)}" readonly`
+    : `placeholder="name@example.ac.jp"`;
+  const emailHint = accessEmail
+    ? `<span class="hint">Cloudflare Access で認証されたメールアドレスを使用します。</span>`
+    : "";
+
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -589,7 +616,8 @@ function renderForm(): string {
       </label>
       <label>
         高専メールアドレス
-        <input name="email" type="email" autocomplete="email" required placeholder="name@example.ac.jp">
+        <input name="email" type="email" autocomplete="email" required ${emailInputAttributes}>
+        ${emailHint}
       </label>
       <label>
         名前
@@ -638,4 +666,12 @@ function renderForm(): string {
   </script>
 </body>
 </html>`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;");
 }
