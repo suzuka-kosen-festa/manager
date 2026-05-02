@@ -1,5 +1,6 @@
 interface Env {
   GITHUB_APP_ID: string;
+  GITHUB_CLIENT_ID?: string;
   GITHUB_INSTALLATION_ID: string;
   GITHUB_PRIVATE_KEY: string;
   GITHUB_OWNER?: string;
@@ -20,7 +21,7 @@ interface Application {
 
 const DEFAULT_OWNER = "suzuka-kosen-festa";
 const DEFAULT_REPO = "manager-data";
-const DEFAULT_BASE_BRANCH = "feat/main";
+const DEFAULT_BASE_BRANCH = "main";
 const DEFAULT_MEMBERS_CSV_PATH = "members.csv";
 const DEFAULT_ROLE = "member";
 const USERNAME_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
@@ -310,8 +311,10 @@ async function createInstallationToken(env: Env): Promise<string> {
   assertEnv(env.GITHUB_INSTALLATION_ID, "GITHUB_INSTALLATION_ID");
   assertEnv(env.GITHUB_PRIVATE_KEY, "GITHUB_PRIVATE_KEY");
 
-  const jwt = await createAppJwt(env.GITHUB_APP_ID, env.GITHUB_PRIVATE_KEY);
-  const response = await fetch(`https://api.github.com/app/installations/${env.GITHUB_INSTALLATION_ID}/access_tokens`, {
+  const issuer = cleanSecret(env.GITHUB_CLIENT_ID ?? env.GITHUB_APP_ID);
+  const installationId = cleanSecret(env.GITHUB_INSTALLATION_ID);
+  const jwt = await createAppJwt(issuer, cleanPrivateKey(env.GITHUB_PRIVATE_KEY));
+  const response = await fetch(`https://api.github.com/app/installations/${installationId}/access_tokens`, {
     method: "POST",
     headers: {
       Accept: "application/vnd.github+json",
@@ -322,7 +325,8 @@ async function createInstallationToken(env: Env): Promise<string> {
   });
 
   if (!response.ok) {
-    throw new Error(`GitHub installation token の作成に失敗しました: ${response.status}`);
+    const body = await response.text();
+    throw new Error(`GitHub installation token の作成に失敗しました: ${response.status} ${body}`);
   }
 
   const body = (await response.json()) as { token: string };
@@ -442,7 +446,7 @@ function parseAllowedDomains(value: string | undefined): string[] {
 }
 
 function pemToArrayBuffer(pem: string): ArrayBuffer {
-  const normalized = pem.replace(/\\n/g, "\n");
+  const normalized = cleanPrivateKey(pem);
   const isPkcs1 = normalized.includes("BEGIN RSA PRIVATE KEY");
   const base64 = normalized
     .replace("-----BEGIN RSA PRIVATE KEY-----", "")
@@ -531,6 +535,18 @@ function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const buffer = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(buffer).set(bytes);
   return buffer;
+}
+
+function cleanSecret(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function cleanPrivateKey(value: string): string {
+  return cleanSecret(value).replace(/\\n/g, "\n").trim();
 }
 
 function assertEnv(value: string | undefined, name: string): asserts value is string {
