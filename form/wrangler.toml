@@ -5,7 +5,7 @@ compatibility_date = "2026-04-28"
 [vars]
 GITHUB_OWNER = "suzuka-kosen-festa"
 GITHUB_REPO = "manager-data"
-GITHUB_BASE_BRANCH = "feat/main"
+GITHUB_BASE_BRANCH = "main"
 MEMBERS_CSV_PATH = "members.csv"
 DEFAULT_ROLE = "member"
 # Optional comma-separated domain allow-list, for example:

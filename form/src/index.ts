@@ -21,7 +21,7 @@ interface Application {
 
 const DEFAULT_OWNER = "suzuka-kosen-festa";
 const DEFAULT_REPO = "manager-data";
-const DEFAULT_BASE_BRANCH = "feat/main";
+const DEFAULT_BASE_BRANCH = "main";
 const DEFAULT_MEMBERS_CSV_PATH = "members.csv";
 const DEFAULT_ROLE = "member";
 const USERNAME_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
