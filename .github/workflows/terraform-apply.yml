@@ -57,31 +57,71 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
           submodules: recursive
+          show-progress: false
 
       - name: Update manager-data
         working-directory: .
         run: |
           manager_data_branch="$(git config -f .gitmodules submodule.manager-data.branch)"
-          git -C manager-data fetch --depth=1 origin "${manager_data_branch}"
-          git -C manager-data checkout --detach FETCH_HEAD
-          git -C manager-data log -1 --oneline
+          git -C manager-data fetch --quiet --depth=1 origin "${manager_data_branch}"
+          git -C manager-data checkout --quiet --detach FETCH_HEAD
+          echo "manager-data updated."
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
 
       - name: Terraform Init
-        run: terraform init
+        run: |
+          set +e
+          terraform init -no-color > terraform-init.log 2>&1
+          status=$?
+          if [ "${status}" -ne 0 ]; then
+            echo "Terraform init failed. Logs are suppressed because this workflow is public."
+            exit "${status}"
+          fi
+          echo "Terraform init completed."
 
       - name: Terraform Validate
-        run: terraform validate
+        run: |
+          set +e
+          terraform validate -no-color > terraform-validate.log 2>&1
+          status=$?
+          if [ "${status}" -ne 0 ]; then
+            echo "Terraform validate failed. Logs are suppressed because this workflow is public."
+            exit "${status}"
+          fi
+          echo "Terraform validate completed."
 
       - name: Terraform Plan
         run: |
-          terraform plan -no-color -out=tfplan
-          terraform show -no-color tfplan > tfplan.txt
+          set +e
+          terraform plan -no-color -out=tfplan > terraform-plan.log 2>&1
+          status=$?
+          if [ "${status}" -ne 0 ]; then
+            echo "Terraform plan failed. Logs are suppressed because this workflow is public."
+            exit "${status}"
+          fi
+
+          terraform show -no-color tfplan > tfplan.txt 2> terraform-show.log
+          status=$?
+          if [ "${status}" -ne 0 ]; then
+            echo "Terraform show failed. Logs are suppressed because this workflow is public."
+            exit "${status}"
+          fi
+          echo "Terraform plan completed."
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
+        run: |
+          set +e
+          terraform apply -auto-approve tfplan > terraform-apply.log 2>&1
+          status=$?
+          if [ "${status}" -ne 0 ]; then
+            echo "Terraform apply failed. Logs are suppressed because this workflow is public."
+            exit "${status}"
+          fi
+          echo "Terraform apply completed."
 
       - name: Notify Discord
         env:
@@ -116,7 +156,23 @@ jobs:
           fi
 
           jq -Rs '{content: .}' discord-message.txt > discord-payload.json
-          curl --fail-with-body \
+          set +e
+          http_status="$(curl --silent --output discord-response.txt --write-out "%{http_code}" \
             -H "Content-Type: application/json" \
             -d @discord-payload.json \
-            "${DISCORD_WEBHOOK_URL}"
+            "${DISCORD_WEBHOOK_URL}" 2> discord-curl.log)"
+          curl_status=$?
+          set -e
+
+          if [ "${curl_status}" -ne 0 ]; then
+            echo "Discord notification failed. Curl output is suppressed because this workflow is public."
+            exit "${curl_status}"
+          fi
+
+          case "${http_status}" in
+            2*) echo "Discord notification sent." ;;
+            *)
+              echo "Discord notification failed. Response body is suppressed because this workflow is public."
+              exit 1
+              ;;
+          esac
