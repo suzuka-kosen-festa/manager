@@ -310,8 +310,10 @@ async function createInstallationToken(env: Env): Promise<string> {
   assertEnv(env.GITHUB_INSTALLATION_ID, "GITHUB_INSTALLATION_ID");
   assertEnv(env.GITHUB_PRIVATE_KEY, "GITHUB_PRIVATE_KEY");
 
-  const jwt = await createAppJwt(env.GITHUB_APP_ID, env.GITHUB_PRIVATE_KEY);
-  const response = await fetch(`https://api.github.com/app/installations/${env.GITHUB_INSTALLATION_ID}/access_tokens`, {
+  const appId = env.GITHUB_APP_ID.trim();
+  const installationId = env.GITHUB_INSTALLATION_ID.trim();
+  const jwt = await createAppJwt(appId, env.GITHUB_PRIVATE_KEY);
+  const response = await fetch(`https://api.github.com/app/installations/${installationId}/access_tokens`, {
     method: "POST",
     headers: {
       Accept: "application/vnd.github+json",
@@ -322,7 +324,8 @@ async function createInstallationToken(env: Env): Promise<string> {
   });
 
   if (!response.ok) {
-    throw new Error(`GitHub installation token の作成に失敗しました: ${response.status}`);
+    const body = await response.text();
+    throw new Error(`GitHub installation token の作成に失敗しました: ${response.status} ${body}`);
   }
 
   const body = (await response.json()) as { token: string };
