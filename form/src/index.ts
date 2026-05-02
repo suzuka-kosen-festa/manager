@@ -310,9 +310,9 @@ async function createInstallationToken(env: Env): Promise<string> {
   assertEnv(env.GITHUB_INSTALLATION_ID, "GITHUB_INSTALLATION_ID");
   assertEnv(env.GITHUB_PRIVATE_KEY, "GITHUB_PRIVATE_KEY");
 
-  const appId = env.GITHUB_APP_ID.trim();
-  const installationId = env.GITHUB_INSTALLATION_ID.trim();
-  const jwt = await createAppJwt(appId, env.GITHUB_PRIVATE_KEY);
+  const appId = cleanSecret(env.GITHUB_APP_ID);
+  const installationId = cleanSecret(env.GITHUB_INSTALLATION_ID);
+  const jwt = await createAppJwt(appId, cleanPrivateKey(env.GITHUB_PRIVATE_KEY));
   const response = await fetch(`https://api.github.com/app/installations/${installationId}/access_tokens`, {
     method: "POST",
     headers: {
@@ -445,7 +445,7 @@ function parseAllowedDomains(value: string | undefined): string[] {
 }
 
 function pemToArrayBuffer(pem: string): ArrayBuffer {
-  const normalized = pem.replace(/\\n/g, "\n");
+  const normalized = cleanPrivateKey(pem);
   const isPkcs1 = normalized.includes("BEGIN RSA PRIVATE KEY");
   const base64 = normalized
     .replace("-----BEGIN RSA PRIVATE KEY-----", "")
@@ -534,6 +534,18 @@ function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const buffer = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(buffer).set(bytes);
   return buffer;
+}
+
+function cleanSecret(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function cleanPrivateKey(value: string): string {
+  return cleanSecret(value).replace(/\\n/g, "\n").trim();
 }
 
 function assertEnv(value: string | undefined, name: string): asserts value is string {
