@@ -1,0 +1,77 @@
+name: Terraform Apply
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/terraform-apply.yml"
+      - ".gitmodules"
+      - "terraform/**"
+      - "Makefile"
+      - "manager-data"
+  schedule:
+    - cron: "*/30 * * * *"
+  repository_dispatch:
+    types:
+      - terraform-apply
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-apply-production
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Apply
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_VAR_github_org: ${{ vars.TARGET_GITHUB_ORG || 'suzuka-kosen-festa' }}
+      TF_VAR_github_app_id: ${{ secrets.GH_APP_ID }}
+      TF_VAR_github_app_installation_id: ${{ secrets.GH_APP_INSTALLATION_ID }}
+      TF_VAR_github_app_pem_file: ${{ secrets.GH_APP_PRIVATE_KEY }}
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: suzuka-kosen-festa
+          repositories: |
+            manager
+            manager-data
+          permission-contents: read
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          submodules: recursive
+
+      - name: Update manager-data
+        working-directory: .
+        run: |
+          git submodule update --remote manager-data
+          git -C manager-data log -1 --oneline
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve

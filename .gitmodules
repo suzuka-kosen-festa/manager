@@ -1,0 +1,4 @@
+[submodule "manager-data"]
+	path = manager-data
+	url = https://github.com/suzuka-kosen-festa/manager-data.git
+	branch = feat/main
