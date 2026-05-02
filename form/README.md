@@ -37,7 +37,7 @@ wrangler secret put DISCORD_WEBHOOK_URL
 `GITHUB_PRIVATE_KEY` は GitHub App の PEM 秘密鍵をそのまま登録します。
 `DISCORD_WEBHOOK_URL` には申請成功時の差分通知を送る Discord Webhook URL を登録します。
 
-Terraform apply 成功時の差分通知にも同じ Webhook URL を使うため、GitHub Actions の repository secret にも `DISCORD_WEBHOOK_URL` を登録してください。
+Terraform apply 成功時の差分通知にも同じ Webhook URL を使うため、GitHub Actions の repository secret にも `DISCORD_WEBHOOK_URL` を登録してください。差分がない場合は通知しません。
 
 ## 設定
 
