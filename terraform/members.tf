@@ -1,9 +1,10 @@
 locals {
+  members_csv_path = "${path.module}/../manager-data/members.csv"
+
   members = {
-    # GitHub username = role ("member" or "admin")
-    # 例:
-    # "octocat" = "member"
-    # "admin-user" = "admin"
+    for row in csvdecode(file(local.members_csv_path)) :
+    trimspace(row.username) => lower(trimspace(row.role))
+    if trimspace(try(row.username, "")) != ""
   }
 }
 
